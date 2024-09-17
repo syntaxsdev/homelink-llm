@@ -3,7 +3,12 @@ from langchain_core.language_models import BaseLanguageModel
 from shared.utils import load_yaml
 from .models import Intent
 import os
+from dataclasses import dataclass
 
+@dataclass
+class IntentResponse():
+    intent: Intent = None
+    query: bool = False
 
 class IntentEngine:
     """
@@ -44,7 +49,7 @@ class IntentEngine:
         """
         return response
 
-    async def determine_intent(self, input: str) -> Intent:
+    async def determine_intent(self, input: str) -> IntentResponse:
         """
         Determine intent based off keywords
         If not fallback to LLM for tie break on multiple options or no options
@@ -54,14 +59,14 @@ class IntentEngine:
         intent_count = await self._count_intent(input)
         max_count = max(intent_count.values())
         if max_count == 0:  # no intents found
-            return None  # todo
+            return IntentResponse()  # todo
 
         top_intents, max_count, has_multiple = await self._get_top_intent(intent_count)
         # add back typing
         top_intents: dict[str, int] = top_intents
 
         if not has_multiple:
-            return self._get_intent_data(top_intents[0])
+            return IntentResponse(intent=self._get_intent_data(top_intents[0]), query=False)
 
         if has_multiple and (len(top_intents) > 1):
             intents_for_tiebreak = {}
@@ -72,18 +77,16 @@ class IntentEngine:
                     "description": intent.description,
                     "keywords": intent.keywords,
                     "likely_correct_intent_score": max_for_intent,
+                    "query": intent.query.when if intent.query else []
                 }
             chosen = await self.llm_tiebreak(
                 input=input, top_intents=intents_for_tiebreak
             )
-            # could not determine
-            if not chosen:
-                return None
             return chosen
 
     async def llm_tiebreak(
         self, input: str, top_intents: dict[str, int], tries: int = 1
-    ):
+    ) -> IntentResponse:
         """
         Breaks tie for similar intent
 
@@ -95,15 +98,19 @@ class IntentEngine:
             return None
         chain = INTENT_TIE_BREAK | self.llm
         msg_ctx = await chain.ainvoke({"input": input, "intent_data": str(top_intents)})
-        response = msg_ctx.content
+        response: str = msg_ctx.content
         if response.lower() == "none":
-            return None
-        intent: Intent = self._get_intent_data(response.strip())
+            return IntentResponse()
+        # query tag
+        query = response.find("?") > 0
+    
+        intent: Intent = self._get_intent_data(response.strip().replace("?", ""))
+        
 
         if not intent:
             tries += 1
             return await self.llm_tiebreak(input, top_intents, tries)
-        return intent
+        return IntentResponse(intent=intent, query=query)
 
     async def _count_intent(self, input: str) -> dict[str, int]:
         """

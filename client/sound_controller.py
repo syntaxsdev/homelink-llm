@@ -1,7 +1,6 @@
 from shared.mixins import ResponseMixin
 
-from pydub import AudioSegment
-from pydub.playback import play
+from pygame import mixer
 from dataclasses import dataclass
 
 from concurrent.futures import ThreadPoolExecutor
@@ -20,9 +19,8 @@ class SoundController:
     """The SoundController class"""
 
     def __init__(self):
-        self.is_playing: bool = False
-        self.executor = ThreadPoolExecutor(max_workers=3)
-    
+        mixer.init()
+
     async def play_sound(
         self,
         file: str,
@@ -38,13 +36,13 @@ class SoundController:
             scr: previous SoundControllerResponse in case of retry
         """
         if not os.path.exists(file):
-            return FileNotFoundError("Could not play audio file.")
+            raise FileNotFoundError("Could not play audio file.")
 
         if self.is_playing and not overplay:
             while self.is_playing:
-                asyncio.timeout(delay=1)  # wait until sound is done
+                asyncio.timeout(delay=0.2)  # wait until sound is done
         try:
-            await asyncio.to_thread(self.__play_sound_async, file)
+            await self._play_sound(file)
 
         except Exception as ex:
             if scr:
@@ -59,25 +57,27 @@ class SoundController:
                 retry_count=1,
                 meta=ex,
             )
+
+    @property
+    def is_playing(self) -> bool:
+        return mixer.music.get_busy()
     
-    def __play_sound_async(self, file: str):
-        """Internal function that abstracts just playing the sound asynchronously
-
-        Args:
-            file: the sound file
+    async def _play_sound(self, file: str):
         """
-        try:
-            sound = AudioSegment.from_wav(file)
-        except Exception as ex:
-            raise ex
+        """
 
-        if self.is_playing:
-            self.stop_sound()
-        self.sound = sound
-        play(sound)
+        await asyncio.to_thread(mixer.music.load, file)
+        await asyncio.to_thread(mixer.music.play)
+        
+        asyncio.create_task(self.wait_for_playback())
 
+    async def wait_for_playback(self):
+        """Background task that monitors if the music is still playing"""
+        while mixer.music.get_busy():
+            await asyncio.sleep(0.1)  # Wait a bit before checking again
+        print("Music finished")
+        
     def stop_sound(self):
-        """Hacky method to stop sound"""
-        if self.is_playing and self.sound:
-            audio_muted = self.sound.apply_gain(-120.0)
-            self.executor.submit(play, audio_muted)
+        """Stop playing sound"""
+        if self.is_playing:
+            mixer.music.stop()

@@ -5,10 +5,12 @@ from .models import Intent
 import os
 from dataclasses import dataclass
 
+
 @dataclass
-class IntentResponse():
+class IntentResponse:
     intent: Intent = None
     query: bool = False
+
 
 class IntentEngine:
     """
@@ -18,28 +20,15 @@ class IntentEngine:
         llm: the LLM model from Langchain
     """
 
-    def __init__(self, llm: BaseLanguageModel):
+    def __init__(self, intents: dict, llm: BaseLanguageModel):
         self.llm = llm
 
-        intents_file = os.path.abspath(
-            os.path.join(
-                os.path.dirname(__file__), os.path.pardir, "config", "intents.yml"
+        try:
+            self.intents = [Intent.model_validate(item) for item in intents["intents"]]
+        except Exception:
+            raise AttributeError(
+                "Please check your intents.yml file for attribute issues"
             )
-        )
-        if not os.path.exists(intents_file):
-            return FileNotFoundError(
-                "Intents.yml file deleted or moved. Program is now quitting."
-            )
-        loaded_yaml = load_yaml(intents_file)
-        if loaded_yaml:
-            try:
-                self.intents = [
-                    Intent.model_validate(item) for item in loaded_yaml["intents"]
-                ]
-            except Exception:
-                raise AttributeError(
-                    "Please check your intents.yml file for attribute issues"
-                )
 
     def empty_intent(self, response: any) -> callable:
         """Empty intent
@@ -66,7 +55,9 @@ class IntentEngine:
         top_intents: dict[str, int] = top_intents
 
         if not has_multiple:
-            return IntentResponse(intent=self._get_intent_data(top_intents[0]), query=False)
+            return IntentResponse(
+                intent=self._get_intent_data(top_intents[0]), query=False
+            )
 
         if has_multiple and (len(top_intents) > 1):
             intents_for_tiebreak = {}
@@ -77,7 +68,7 @@ class IntentEngine:
                     "description": intent.description,
                     "keywords": intent.keywords,
                     "likely_correct_intent_score": max_for_intent,
-                    "query": intent.query.when if intent.query else []
+                    "query": intent.query.when if intent.query else [],
                 }
             chosen = await self.llm_tiebreak(
                 input=input, top_intents=intents_for_tiebreak
@@ -103,9 +94,8 @@ class IntentEngine:
             return IntentResponse()
         # query tag
         query = response.find("?") > 0
-    
+
         intent: Intent = self._get_intent_data(response.strip().replace("?", ""))
-        
 
         if not intent:
             tries += 1
@@ -146,6 +136,9 @@ class IntentEngine:
     def _get_intent_data(self, key: str) -> Intent:
         """
         Get intent for key/name
+
+        Args:
+            key: the intent key
         """
         if not self.intents:
             return None

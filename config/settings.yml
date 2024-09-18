@@ -4,6 +4,8 @@ llm:
   reasoning_llm_model: gpt-4o-mini
   intent_llm: openai
   intent_llm_model: gpt-4o-mini
+  task_llm: openai
+  task_llm_model: gpt-4o-mini
 
 voice:
   voice_agent: echo

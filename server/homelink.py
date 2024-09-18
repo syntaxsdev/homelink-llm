@@ -2,8 +2,11 @@ from .intents import IntentEngine, IntentResponse
 from .settings import Settings, SettingsResponse
 from .voice import Voice
 from .llm import LLMContext
+from .agent import AgentBase, AgentConfig
 
+from .agents import Memory
 from shared.utils import load_yaml
+
 from redis import Redis
 
 import asyncio
@@ -41,7 +44,7 @@ class HomeLink:
         host: str = os.getenv("REDIS_HOST") or "localhost"
 
         # Create the Redis object
-        self.redis = Redis(host=host, port=port)
+        self.redis = Redis(host=host, port=port, decode_responses=True)
 
         # Set the settings
         self.settings = Settings(settings=stgs, settings_opt=stgs_opt, redis=self.redis)
@@ -49,15 +52,25 @@ class HomeLink:
 
         self.voice = Voice(settings=self.settings)
 
+        # Create AgentConfig
+        self.agent_config = AgentConfig(redis=self.redis, llm_ctx=self.llm_context)
+
+        # Load Main Agents
+        self.memory = Memory(config=self.agent_config)
+
         intent_data = load_yaml(intents_file)
-        self.intents_engine = IntentEngine(intents=intent_data, llm=self.llm_context.intent_llm)
+        self.intents_engine = IntentEngine(
+            intents=intent_data, llm=self.llm_context.intent_llm
+        )
 
     async def execute_link(self, input: str):
         """
         Execute a link
         """
-        intent: IntentResponse = await self.intents_engine.determine_intent(input)
-        print(intent)
+        response: IntentResponse = await self._get_intent(input)
+        print(response)
+        if not response.intent:
+            await self.memory._is_this_memorable(input)
 
     async def _get_intent(self, input: str) -> IntentResponse:
         """

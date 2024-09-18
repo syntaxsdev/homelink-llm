@@ -1,8 +1,14 @@
 from .models import LLMSettings
 from .settings import Settings
+from shared.mixins import ResponseMixin
+from config.prompts import HEAL_PROMPT_SECOND_ATTEMPT, HEAL_PROMPT_FIRST_ATTEMPT
 from langchain_openai import OpenAI, ChatOpenAI
 from langchain_core.language_models import BaseLanguageModel
+from langchain.chains.base import Chain
+from langchain.chains.sequential import SequentialChain
+from langchain_core.runnables import RunnableLambda
 
+from typing import Any, Callable
 
 class LLMContext:
     """
@@ -16,7 +22,7 @@ class LLMContext:
         self.settings = settings
         llm_settings = settings.llm
         self.llm_settings = llm_settings
-        
+
         # Reasoning LLM
         self._reasoning_llm = construct_llm(
             llm_settings.reasoning_llm, llm_settings.reasoning_llm_model
@@ -42,6 +48,64 @@ class LLMContext:
     @reasoning_llm.setter
     def reasoning_llm(self, value: BaseLanguageModel):
         self._reasoning_llm = value
+
+
+def heal(
+    llm: BaseLanguageModel, action: Callable[[Any], ResponseMixin], retry_max: int = 3
+):
+    """
+    Heals any functions from incorrect LLM response. You must return a `ResponseMixin` 
+    indicating to retry and pass some metadata to `meta` if you want to give additional context
+
+    Args:
+        llm: The BaseLanguageModel (llama, openai, anthropic, ..etc)
+        action: the Runnable function that takes in a parameter. Must return a ResponseMixin
+        retry_max: default set to 3, how many times to retry
+
+    Examples:
+        ```py
+        chain = prompt | heal(llm, action)
+        await chain.ainvoke({})
+        ```
+    """
+
+    async def healer(input, retry: int = 0):
+        original_input = input
+
+        async def invoke(local_input):
+            llm_response = await llm.ainvoke(local_input)
+            print("llm response", llm_response)
+
+            response: ResponseMixin = await action(llm_response)
+            return llm_response, response
+
+        while retry < retry_max:
+            llm_response, response = await invoke(input)
+            if not response.retry:
+                return response
+
+            if retry == 0:
+                input = await HEAL_PROMPT_FIRST_ATTEMPT.ainvoke(
+                    {
+                        "request": input,
+                        "meta": response.meta,
+                        "mixin_response": response.response,
+                    }
+                )
+
+            elif retry >= 1:
+                input = await HEAL_PROMPT_SECOND_ATTEMPT.ainvoke(
+                    {
+                        "previous": original_input,
+                        "previous_response": llm_response,
+                        "meta": response.meta,
+                    }
+                )
+            retry += 1
+
+        return response
+
+    return RunnableLambda(healer)
 
 
 def construct_llm(llm: str, llm_model: str) -> BaseLanguageModel:

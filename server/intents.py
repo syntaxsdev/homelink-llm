@@ -145,6 +145,3 @@ class IntentEngine:
         intent = [intent for intent in self.intents if intent.name == key]
         if len(intent) > 0:
             return intent[0]
-
-
-IntentEngine(2)

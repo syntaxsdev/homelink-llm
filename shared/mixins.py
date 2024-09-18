@@ -8,6 +8,6 @@ class ResponseMixin:
     meta: dict | None = None
 
 
-    def from_retry(self, response):
-        return self.__class__(response=response, retry=True)
+    def from_retry(cls, response):
+        return cls(response=response, retry=True)
 

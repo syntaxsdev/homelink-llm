@@ -23,6 +23,7 @@ import asyncio
 async def entry():
     dir = os.path.join(os.getcwd(), "config/")
     homelink = HomeLink(config_folder=dir)
+    await homelink.execute_link("Add eggs to grocery list")
     
 
 asyncio.run(entry())

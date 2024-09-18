@@ -1,0 +1,14 @@
+---
+llm:
+  reasoning_llm: openai
+  reasoning_llm_model: gpt-4o-mini
+  intent_llm: openai
+  intent_llm_model: gpt-4o-mini
+
+voice:
+  voice_agent: echo
+  voice_lib: openai
+  voice_model: tts-1
+  voice_pitch: 0
+
+...

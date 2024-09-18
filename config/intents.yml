@@ -1,0 +1,23 @@
+---
+intents:
+  - name: iMessage
+    description: Ablity to send iMessage and retrieve messages about people for context
+    keywords:
+      - imessage
+      - message
+      - text
+    agent: imessage
+    query:
+      when:
+        # - user mentions someone
+        - 'to fact check something mentioned by someone in a group chat'
+
+  - name: Lights
+    description: Ablity to turn off and on lights in the house
+    keywords:
+      - turn lights
+      - lights
+    agent: lights
+
+
+...

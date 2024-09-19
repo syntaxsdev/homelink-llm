@@ -156,15 +156,17 @@ class Memory(AgentBase):
             else:
                 memory = split[2]
                 await self.store(key=key, memory=memory, value_type=mod)
-        return ResponseMixin(response="", completed=True)
-
-    # async def llm_store(input: AIMessage) -> ResponseMixin:
-    #     """
-    #     Method for storing """
+        return ResponseMixin(response=None, completed=True)
 
     async def _is_this_memorable(self, input: str) -> ResponseMixin:
-        """ """
+        """
+        Determines if this message is memorable
+
+        Args:
+            input: the user input
+        """
         llm = self.llm_ctx.reasoning_llm
-        llm.invoke()
-        chain = DETERMINE_IF_MEMORY | heal(llm.with_config(config={"llm_temperature": 0}), self._parse_memory_response)
-        await chain.ainvoke({"text": input})
+        chain = DETERMINE_IF_MEMORY | heal(
+            llm.with_config(config={"llm_temperature": 0}), self._parse_memory_response
+        )
+        response: ResponseMixin = await chain.ainvoke({"text": input})

@@ -6,6 +6,7 @@ from tempfile import TemporaryFile
 
 from .models import VoiceSettings
 
+import io
 
 class Voice:
     def __init__(self, settings: Settings):
@@ -57,11 +58,16 @@ class Voice:
         if vs.voice_lib == "openai":
             data = await AsyncSpeech(client=self.openai_client).create(
                 input=input,
-                model=vs.voice_lib,
+                model=vs.voice_model,
                 voice=vs.voice_agent,
-                response="wav",
+                response_format="mp3",
                 speed=vs.voice_pitch,
             )
-            with TemporaryFile(mode="w+", suffix=".wav", delete=True) as tmpfile:
-                tmpfile.write(data.content)
-                # send file to client...
+            temp_bytes = io.BytesIO()
+            temp_bytes.write(data.content)
+            temp_bytes.seek(0)
+            return temp_bytes
+            # with TemporaryFile(mode="w+b", suffix=".mp3") as tmpfile:
+            #     tmpfile.write(data.content)
+            #     print("file name", tmpfile.name)
+            #     return tmpfile.name

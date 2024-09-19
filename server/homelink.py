@@ -4,10 +4,14 @@ from .voice import Voice
 from .llm import LLMContext
 from .agent import AgentBase, AgentConfig
 
+from shared.mixins import ResponseMixin
+
 from .agents import Memory
 from shared.utils import load_yaml
+from config.prompts import CASUAL_CHAT
 
 from redis import Redis
+ 
 
 import asyncio
 import os
@@ -24,6 +28,7 @@ class HomeLink:
         stgs = f"{config_folder}/settings.yml"
         stgs_opt = f"{config_folder}/SETTINGS_OPT.yml"
         intents_file = f"{config_folder}/intents.yml"
+        client = f"{config_folder}/client.yml"
 
         if not os.path.exists(stgs):
             raise FileNotFoundError(
@@ -39,6 +44,11 @@ class HomeLink:
             raise FileNotFoundError(
                 f"Could not find intents.yml in config folder {config_folder}."
             )
+        
+        # if not os.path.exists(client):
+        #     raise FileNotFoundError(
+        #         f"Could not find client.yml in config folder {config_folder}."
+        #     )
 
         port: str = os.getenv("REDIS_PORT") or 6379
         host: str = os.getenv("REDIS_HOST") or "localhost"
@@ -47,7 +57,7 @@ class HomeLink:
         self.redis = Redis(host=host, port=port, decode_responses=True)
 
         # Set the settings
-        self.settings = Settings(settings=stgs, settings_opt=stgs_opt, redis=self.redis)
+        self.settings = Settings(settings=stgs, settings_opt=stgs_opt, client=client, redis=self.redis)
         self.llm_context = LLMContext(settings=self.settings)
 
         self.voice = Voice(settings=self.settings)
@@ -67,10 +77,18 @@ class HomeLink:
         """
         Execute a link
         """
-        response: IntentResponse = await self._get_intent(input)
-        print(response)
+        response: IntentResponse = await self._get_intent(input) # TODO:FIX
         if not response.intent:
-            await self.memory._is_this_memorable(input)
+            response: ResponseMixin = await self.memory._is_this_memorable(input)
+            if not response or not response.completed:
+                # build a res
+                print("Issue with memory saving")
+            chain = CASUAL_CHAT | self.llm_context.reasoning_llm
+            response = await chain.ainvoke({'text': input})
+            audio_file = await self.voice.tts(response.content)
+            return audio_file
+            
+
 
     async def _get_intent(self, input: str) -> IntentResponse:
         """

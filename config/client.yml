@@ -1,0 +1,3 @@
+server_ip: http://localhost
+server_port: 6455
+wake_word: Hey Jared

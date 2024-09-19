@@ -1,7 +1,7 @@
 import yaml
 
 
-def load_yaml(file_path: str):
+def load_yaml(file_path: str) -> dict:
     """
     Loads a yaml file
 

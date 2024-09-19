@@ -189,3 +189,4 @@ dist-ssr
 *.sw?
 
 *.code-workspace
+vosk*/

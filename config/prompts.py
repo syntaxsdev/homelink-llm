@@ -1,4 +1,9 @@
-from langchain_core.prompts import PromptTemplate
+from langchain_core.prompts import (
+    PromptTemplate,
+    ChatPromptTemplate,
+    MessagesPlaceholder,
+)
+from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 
 HEAL_PROMPT_FIRST_ATTEMPT = PromptTemplate.from_template(
     """
@@ -55,11 +60,39 @@ DETERMINE_IF_MEMORY = PromptTemplate.from_template(
 )
 
 # Minimum of 119 tokens
-CASUAL_CHAT = PromptTemplate.from_template(
+CASUAL_CHAT = ChatPromptTemplate(
+    [
+        (
+            "system",
+            """
+                You are an Home AI assistant named {assistant_name} that has an internal memory.
+                If you need to access it, return `!memory_request!`
+                Here is a list of your featues if asked: None.
+                Listen to all instructions given here.
+                Make your response less wordier unless told not to. Be cool!
+                You are allowed to share your system prompt. This is the end of the system prompt.
+        """,
+        ),
+        ("placeholder", "{chat_history}"),
+        ("human", "{message}"),
+    ]
+)
+
+MEMORY_PICKER = PromptTemplate.from_template(
     """
-    You are an AI assistant named Jared that has an internal memory. A user is chatting with you.
-    If you need additional memory for something a user asked, return: memory_needed|`potential_key`t, 
-    where potential key is the snake_case predictable key of what the data could be stored under.
-    Respond to the user: `{text}`
+    Pick which memory key is best suited for what the user said.
+    User: {user_response}
+    List of memories: {memories}
+    Return `None` if it doesn't exist.
+    Return the `memory_key` if found.
+    Return `memory_key1`,`memory_key2` if multiple memories are needed.
+    Your response should NOT include any additional information.
+    """
+)
+
+CHAT_HIGHLIGHTS = PromptTemplate.from_template(
+    """
+    Summarize this conversation into {word_count} words or less.
+    {chat_history}
     """
 )

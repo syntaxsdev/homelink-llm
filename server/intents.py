@@ -1,13 +1,13 @@
+from shared.mixins import ResponseMixin
 from config.prompts import INTENT_TIE_BREAK
-from langchain_core.language_models import BaseLanguageModel
-from shared.utils import load_yaml
 from .models import Intent
-import os
+from langchain_core.language_models import BaseLanguageModel
+
 from dataclasses import dataclass
 
 
 @dataclass
-class IntentResponse:
+class IntentResponse(ResponseMixin):
     intent: Intent = None
     query: bool = False
 

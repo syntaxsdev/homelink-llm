@@ -1,10 +1,12 @@
 from server.agent import AgentBase, AgentConfig
+from server.models import ConversationMemory
 from shared.mixins import ResponseMixin
 from shared.chaintools import text
+from shared.utils import get_datetime
 from config.prompts import DETERMINE_SIMILAR_KEY, DETERMINE_IF_MEMORY
 from server.llm import heal
 from langchain_core.messages import AIMessage
-import ast
+from langchain_core.chat_history import InMemoryChatMessageHistory
 
 
 class Memory(AgentBase):
@@ -13,6 +15,20 @@ class Memory(AgentBase):
     def __init__(self, config: AgentConfig):
         self.redis = config.redis
         self.llm_ctx = config.llm_ctx
+
+        # Create InMemory chat storage
+        self.chat_store: dict[str, ConversationMemory] = {}
+
+    def get_chat_session(self, session: str) -> ConversationMemory:
+        """
+        Get chat session history
+
+        Args:
+            session: the session key
+        """
+        if session not in self.chat_store:
+            self.chat_store[session] = ConversationMemory(start_datetime=get_datetime())
+        return self.chat_store[session]
 
     def _store_memory_key_to_memories(self, key: str):
         """
@@ -39,7 +55,7 @@ class Memory(AgentBase):
         key = await self.ensure_key(key)
         # ensure key
         if value_type == "str":
-            self.redis.set(f"memory|{key.lower()}", memory)
+            self.redis.set(key.lower(), memory)
         elif value_type == "list":
             data = self.redis.lrange(name=key, start=0, end=-1)
             for item in memory:
@@ -84,9 +100,8 @@ class Memory(AgentBase):
             requesting chain to revalidate
         """
 
-        like_keys: list[str] = self.redis.keys("memory|*")
-        # remove the memory suffix
-        like_keys = [key.replace("memory|", "") for key in like_keys]
+        like_keys: list[str] = await self.list_of_keys()
+
         chain = DETERMINE_SIMILAR_KEY | self.llm_ctx.intent_llm | text
         res = await chain.ainvoke({"non_key": non_key, "list_of_keys": like_keys})
         if res.lower() == "none":
@@ -94,6 +109,18 @@ class Memory(AgentBase):
             return non_key
         else:
             return res
+
+    async def list_of_keys(self) -> list[str]:
+        """Returns a list available of memory keys"""
+        like_keys: list[str] = self.redis.keys("memory|*")
+        return [key.replace("memory|", "") for key in like_keys]
+
+    async def exists(self, key: str) -> bool:
+        """Determine if memory exists
+
+        Args:
+            key: the memory key to check"""
+        return bool(self.redis.exists(self._to_memory_key(key.lower())))
 
     async def retrieve(self, key: str, qty: int = -1):
         """
@@ -103,7 +130,7 @@ class Memory(AgentBase):
             key: the memory key
             qty: optional, how many memories to get. default is all
         """
-        key = self.ensure_key(key)
+        key = await self.ensure_key(key)
         data_type = self.redis.type(key)
         if data_type == "string":
             data = self.redis.get(key)
@@ -147,16 +174,20 @@ class Memory(AgentBase):
                 meta=text,
             )
 
+        remembered = []
+        cleared = [] 
         for cmd in commands:
             split = cmd.split("|")
             key = split[0]
             mod = split[1]
             if mod == "clear":
                 self.forget(key)
+                cleared.append(key)
             else:
                 memory = split[2]
                 await self.store(key=key, memory=memory, value_type=mod)
-        return ResponseMixin(response=None, completed=True)
+                remembered.append(key)
+        return ResponseMixin(response=f"Remembered something: {','.join(remembered) if remembered else 'null'} | Forgot: {','.join(cleared) if cleared else 'null'}", completed=True)
 
     async def _is_this_memorable(self, input: str) -> ResponseMixin:
         """
@@ -170,3 +201,4 @@ class Memory(AgentBase):
             llm.with_config(config={"llm_temperature": 0}), self._parse_memory_response
         )
         response: ResponseMixin = await chain.ainvoke({"text": input})
+        return response

@@ -4,11 +4,14 @@ from shared.mixins import ResponseMixin
 from config.prompts import HEAL_PROMPT_SECOND_ATTEMPT, HEAL_PROMPT_FIRST_ATTEMPT
 from langchain_openai import OpenAI, ChatOpenAI
 from langchain_core.language_models import BaseLanguageModel
+from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from langchain.chains.base import Chain
 from langchain.chains.sequential import SequentialChain
 from langchain_core.runnables import RunnableLambda
-
+from dataclasses import dataclass
 from typing import Any, Callable
+import inspect
+
 
 class LLMContext:
     """
@@ -50,11 +53,21 @@ class LLMContext:
         self._reasoning_llm = value
 
 
+@dataclass
+class HealHelper:
+    llm_input: any
+    llm_response: AIMessage
+    action_response: ResponseMixin
+    retry_count: int
+
+
 def heal(
-    llm: BaseLanguageModel, action: Callable[[Any], ResponseMixin], retry_max: int = 3
+    llm: BaseLanguageModel,
+    action: Callable[[Any], ResponseMixin],
+    retry_max: int = 3,
 ):
     """
-    Heals any functions from incorrect LLM response. You must return a `ResponseMixin` 
+    Heals any functions from a bad LLM response. You must return a `ResponseMixin`
     indicating to retry and pass some metadata to `meta` if you want to give additional context
 
     Args:
@@ -74,7 +87,6 @@ def heal(
 
         async def invoke(local_input):
             llm_response = await llm.ainvoke(local_input)
-            print("llm response", llm_response)
 
             response: ResponseMixin = await action(llm_response)
             return llm_response, response
@@ -84,23 +96,36 @@ def heal(
             if not response.retry:
                 return response
 
-            if retry == 0:
-                input = await HEAL_PROMPT_FIRST_ATTEMPT.ainvoke(
-                    {
-                        "request": input,
-                        "meta": response.meta,
-                        "mixin_response": response.response,
-                    }
+            # If provided a helper
+            if response.helper:
+                heal_config = HealHelper(
+                    llm_input=original_input,
+                    llm_response=llm_response,
+                    action_response=response,
+                    retry_count=retry,
                 )
+                if inspect.iscoroutinefunction(response.helper):
+                    input = await response.helper(heal_config)
+                else:
+                    input = response.helper(heal_config)
+            else:
+                if retry == 0:
+                    input = await HEAL_PROMPT_FIRST_ATTEMPT.ainvoke(
+                        {
+                            "request": input,
+                            "meta": str(response.meta),
+                            "mixin_response": response.response,
+                        }
+                    )
 
-            elif retry >= 1:
-                input = await HEAL_PROMPT_SECOND_ATTEMPT.ainvoke(
-                    {
-                        "previous": original_input,
-                        "previous_response": llm_response,
-                        "meta": response.meta,
-                    }
-                )
+                elif retry >= 1:
+                    input = await HEAL_PROMPT_SECOND_ATTEMPT.ainvoke(
+                        {
+                            "previous": original_input,
+                            "previous_response": llm_response,
+                            "meta": str(response.meta),
+                        }
+                    )
             retry += 1
 
         return response

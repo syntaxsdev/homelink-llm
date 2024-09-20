@@ -1,8 +1,11 @@
+from shared.utils import get_datetime
+from datetime import datetime
 import os
 import sys
 import pyaudio
 import asyncio
 from vosk import Model, KaldiRecognizer
+import numpy as np
 
 
 class VoskListener:
@@ -11,12 +14,16 @@ class VoskListener:
         wake_word: str,
         model_path: str,
         callback: callable,
+        continous_listen_max: int,
         loop: asyncio.events.AbstractEventLoop,
     ):
         self.wake_word = wake_word
         self.loop = loop
         self.model_path = model_path
         self.callback = callback
+        self.continous_listen = False
+        self.continous_listen_start: datetime = None
+        self.continous_listen_max: int = continous_listen_max
         # Load the Vosk model
         if not os.path.exists(model_path):
             print("Model not found. Please download and extract it.")
@@ -27,6 +34,26 @@ class VoskListener:
         Start the voice listening model
         """
         return await asyncio.to_thread(self._listen)
+
+    def set_continous_listen(self, mode: bool):
+        """
+        Set continous listening mode
+
+        Args:
+            mode: the mode setting
+        """
+        self.continous_listen = mode
+        if mode:
+            self.set_continous_listen_start = get_datetime()
+            return
+        self.continous_listen_start = None
+
+    def continous_listen_check(self):
+        """Control the continous listener"""
+        now = get_datetime()
+        delta = now - self.continous_listen_start
+        if delta.seconds > self.continous_listen_max:
+            self.set_continous_listen(False)
 
     def _listen(self):
         """
@@ -51,10 +78,25 @@ class VoskListener:
 
         while True:
             data = stream.read(4800, exception_on_overflow=False)
+
+            # audio_data = np.frombuffer(data, dtype=np.int16)
+            # mono_data = (audio_data[0::2] + audio_data[1::2]) // 2
+
             if rec.AcceptWaveform(data):
                 result = rec.Result()
-                if self.wake_word.lower() in result.lower():
-                    future = asyncio.run_coroutine_threadsafe(self.callback(result), self.loop)
+                phrase = result.lower()
+                
+                # Check open mic
+                self.continous_listen_check()
+                print(phrase)
+                if (
+                    any(word.lower() in phrase for word in self.wake_word)
+                    or self.continous_listen
+                ):
+                    print(result)
+                    future = asyncio.run_coroutine_threadsafe(
+                        self.callback(result), self.loop
+                    )
                     try:
                         future.result()
                     except Exception as ex:

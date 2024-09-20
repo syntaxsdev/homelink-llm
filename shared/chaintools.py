@@ -1,6 +1,4 @@
-from langchain_core.messages import AIMessage
-
-def text(msg: AIMessage | str) -> str:
+def text(msg: object) -> str:
     if type(msg) is str:
         return msg
     if hasattr(msg, 'content'):

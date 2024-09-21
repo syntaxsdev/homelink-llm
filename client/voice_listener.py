@@ -50,9 +50,11 @@ class VoskListener:
 
     def continous_listen_check(self):
         """Control the continous listener"""
+        if not self.continous_listen_start:
+            return
         now = get_datetime()
         delta = now - self.continous_listen_start
-        if delta.seconds > self.continous_listen_max:
+        if delta.seconds >= self.continous_listen_max:
             self.set_continous_listen(False)
 
     def _listen(self):
@@ -93,7 +95,8 @@ class VoskListener:
                     any(word.lower() in phrase for word in self.wake_word)
                     or self.continous_listen
                 ):
-                    print(result)
+                    # disable the continous listen until told to reactivate
+                    self.set_continous_listen(False)
                     future = asyncio.run_coroutine_threadsafe(
                         self.callback(result), self.loop
                     )

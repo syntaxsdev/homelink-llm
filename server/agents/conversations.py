@@ -105,26 +105,15 @@ class Conversations(AgentBase):
                 if key_real:
                     response_data = await self.memory.retrieve(key)
                     memory_data[key] = response_data.response
-            
+
             # if empty
             if not memory_data:
-                memory_data="User does not have any memories related. Request information from user, but keep it brief."
+                memory_data = "User does not have any memories related. Request information from user, but keep it brief."
             final_message = f"{last_message} | Memory Bank: {str(memory_data)}"
             print(final_message)
             return final_message
 
         return heal_helper
-
-    def store_ai_message(self, input: AIMessage):
-        """
-        Pass through that ensures an AI message gets added to convo history
-
-        Args:
-            input: AIMessage from the LLM output/response
-        """
-        memory = self.get_convo_memory(self.convo_id)
-        memory.add_ai_message(input)
-        return input
 
     async def ensure_conversation(self, input):
         """

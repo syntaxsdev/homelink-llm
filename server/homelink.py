@@ -102,19 +102,20 @@ class HomeLink:
         """
         Execute a link
         """
-        response: IntentResponse = await self.determine_intent(input)  # TODO:FIX
-        if response.intent:
-            intent_execution = await self.execute_intent(response)
+        intents: IntentResponse = await self.determine_intent(input)  # TODO:FIX
+        if intents.intent:
+            intent_execution = await self.execute_intent(intents)
         else:
-            response: ResponseMixin = await self.memory._is_this_memorable(input)
-            if not response or not response.completed:
-                # build a res
-                print("Issue with memory saving")
+            memorable: ResponseMixin = await self.memory._is_this_memorable(input)
+
             response = await self.conversations.conversate(input)
 
-            # response = await chain.ainvoke({'text': input})
-            # audio_file = await self.voice.tts(response.content)
-            # return audio_file
+            continous_convo = False
+            if response.strip().endswith("?"):
+                continous_convo = True
+            
+            audio_file = await self.voice.tts(response)
+            return continous_convo, audio_file
 
     async def determine_intent(self, input: str) -> IntentResponse:
         """

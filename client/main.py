@@ -1,20 +1,22 @@
-from fastapi import FastAPI, UploadFile, File
-from contextlib import asynccontextmanager
-
+from .voice_listener import VoskListener
 from .sound_controller import SoundController
 
+from fastapi import FastAPI, UploadFile, File
+from contextlib import asynccontextmanager
 from shared.mixins import ResponseMixin
 from shared.utils import load_yaml
 from tempfile import TemporaryFile
 from dataclasses import dataclass
+from pydantic import BaseModel
+
 import httpx
 import uvicorn
 import asyncio
 import os
 import json
 
-from .voice_listener import VoskListener
-
+class PlayModel(BaseModel):
+    continous: bool
 
 @dataclass
 class ClientResponseMixin(ResponseMixin): ...
@@ -42,11 +44,12 @@ def on_startup() -> tuple[FastAPI, SoundController, VoskListener]:
                 json=payload,
                 headers={"Content-Type":"application/json"}
             )
-    
+    model = os.path.abspath(os.path.join(dir,  "..", "vosk-model-small-en-us-0.15"))
     vosk_listener = VoskListener(
-        wake_word=client_settings["wake_word"],
-        model_path=f"{os.path.join(os.path.abspath(dir), "vosk-model-small-en-us-0.15")}",
+        wake_word=client_settings["wake_words"],
+        model_path=model,
         callback=send_speech_phenomenon,
+        continous_listen_max=client_settings['continous_listening_max_seconds'],
         loop=asyncio.get_event_loop(),
     )
 
@@ -74,9 +77,15 @@ app, sound_controller, vosk_listener = on_startup()
 def get_root():
     return {"status": "active"}
 
+@app.post("/set_continous")
+async def set_continous():
+    vosk_listener.set_continous_listen(True)
+    return ClientResponseMixin(response="Completed", completed=True)
+
 
 @app.post("/play")
-async def play_audio(file: UploadFile = File(...)):
+async def play_audio(play: PlayModel, file: UploadFile = File(...)):
+    print("play model", play)
     with TemporaryFile(delete=False, suffix=".mp3") as temp_audio_file:
         temp_audio_file.write(await file.read())
         temp_audio_file.flush()

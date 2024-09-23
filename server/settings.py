@@ -12,7 +12,7 @@ class SettingsResponse(ResponseMixin):
 
 
 class Settings:
-    def __init__(self, settings_opt: str, settings: str, redis: Redis):
+    def __init__(self, settings_opt: str, settings: str, client: str, redis: Redis):
         self.redis = redis
         try:
             self.settings_opt: dict[str, str] = load_yaml(settings_opt)
@@ -23,6 +23,11 @@ class Settings:
             self.settings: dict[str, dict] = load_yaml(settings)
         except Exception as ex:
             raise AttributeError("Error trying to load runtime settings file") from ex
+        
+        # try:
+        #     self.client: dict[str, str] = load_yaml(client)
+        # except Exception as ex:
+        #     raise AttributeError("Error trying to load client settings.") from ex
 
         self.ensure_options(self.settings)
 

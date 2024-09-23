@@ -3,12 +3,13 @@ from .llm import LLMContext
 
 from shared.mixins import ResponseMixin
 from dataclasses import dataclass
-
+from .settings import Settings
 
 @dataclass
 class AgentConfig:
     redis: Redis
     llm_ctx: LLMContext
+    settings: Settings
 
 
 class AgentBase:

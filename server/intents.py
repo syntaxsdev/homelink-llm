@@ -1,13 +1,13 @@
+from shared.mixins import ResponseMixin
 from config.prompts import INTENT_TIE_BREAK
-from langchain_core.language_models import BaseLanguageModel
-from shared.utils import load_yaml
 from .models import Intent
-import os
+from langchain_core.language_models import BaseLanguageModel
+
 from dataclasses import dataclass
 
 
 @dataclass
-class IntentResponse:
+class IntentResponse(ResponseMixin):
     intent: Intent = None
     query: bool = False
 
@@ -43,12 +43,15 @@ class IntentEngine:
         Determine intent based off keywords
         If not fallback to LLM for tie break on multiple options or no options
         This saves cost as only some calls will be used as the intent agent
+
+        Args:
+            input: the user query string
         """
 
         intent_count = await self._count_intent(input)
         max_count = max(intent_count.values())
         if max_count == 0:  # no intents found
-            return IntentResponse()  # todo
+            return IntentResponse(response="No intent")  # todo
 
         top_intents, max_count, has_multiple = await self._get_top_intent(intent_count)
         # add back typing
@@ -56,7 +59,7 @@ class IntentEngine:
 
         if not has_multiple:
             return IntentResponse(
-                intent=self._get_intent_data(top_intents[0]), query=False
+                response="", intent=self._get_intent_data(top_intents[0]), query=False
             )
 
         if has_multiple and (len(top_intents) > 1):
@@ -91,7 +94,7 @@ class IntentEngine:
         msg_ctx = await chain.ainvoke({"input": input, "intent_data": str(top_intents)})
         response: str = msg_ctx.content
         if response.lower() == "none":
-            return IntentResponse()
+            return IntentResponse(response="No intent")
         # query tag
         query = response.find("?") > 0
 
@@ -100,7 +103,7 @@ class IntentEngine:
         if not intent:
             tries += 1
             return await self.llm_tiebreak(input, top_intents, tries)
-        return IntentResponse(intent=intent, query=query)
+        return IntentResponse(response="", intent=intent, query=query)
 
     async def _count_intent(self, input: str) -> dict[str, int]:
         """

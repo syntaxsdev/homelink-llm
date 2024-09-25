@@ -40,7 +40,7 @@ class SoundController:
 
         if self.is_playing and not overplay:
             while self.is_playing:
-                asyncio.timeout(delay=0.2)  # wait until sound is done
+                asyncio.timeout(delay=0.1)  # wait until sound is done
         try:
             await self._play_sound(file)
 

@@ -67,24 +67,25 @@ class VoskListener:
         mic = pyaudio.PyAudio()
         stream = mic.open(
             format=pyaudio.paInt16,
-            channels=1,
-            rate=48000,
+            channels=6,
+            rate=16000,
             input=True,
-            frames_per_buffer=4800,
+            frames_per_buffer=1600,
         )
         stream.start_stream()
 
-        rec = KaldiRecognizer(model, 48000)
+        rec = KaldiRecognizer(model, 16000)
 
         print("Listening for wake word...")
 
         while True:
-            data = stream.read(4800, exception_on_overflow=False)
+            data = stream.read(1600, exception_on_overflow=False)
 
-            # audio_data = np.frombuffer(data, dtype=np.int16)
-            # mono_data = (audio_data[0::2] + audio_data[1::2]) // 2
-
-            if rec.AcceptWaveform(data):
+            audio_data = np.frombuffer(data, dtype=np.int16)
+            mono_data = audio_data[0::6]
+            # mono_data = (audio_data[0::6] + audio_data[1::2]) // 2
+            
+            if rec.AcceptWaveform(mono_data.tobytes()):
                 result = rec.Result()
                 phrase = result.lower()
                 

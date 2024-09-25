@@ -79,13 +79,15 @@ def get_root():
 
 @app.post("/set_continous")
 async def set_continous():
+    await asyncio.sleep(0.5)
+    while sound_controller.is_playing:
+        await asyncio.sleep(0.1)
     vosk_listener.set_continous_listen(True)
     return ClientResponseMixin(response="Completed", completed=True)
 
 
 @app.post("/play")
-async def play_audio(play: PlayModel, file: UploadFile = File(...)):
-    print("play model", play)
+async def play_audio(file: UploadFile = File(...)):
     with TemporaryFile(delete=False, suffix=".mp3") as temp_audio_file:
         temp_audio_file.write(await file.read())
         temp_audio_file.flush()

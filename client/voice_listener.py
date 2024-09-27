@@ -44,7 +44,7 @@ class VoskListener:
         self.porcupine = pvporcupine.create(
             access_key=pico_api_key,
             keyword_paths=pico_keyword_files,
-            sensitivities=[0.7],
+            sensitivities=[0.8],
         )
         # Load the Vosk model
         if not os.path.exists(model_path):
@@ -140,8 +140,7 @@ class VoskListener:
                             # Immediately feed buffered audio to Kaldi
                             for buffered_data in recorded_audio:
                                 if rec.AcceptWaveform(buffered_data):
-                                    result = rec.Result()
-                                    self._process_phrase(result)
+                                    ...
 
                             while True:
                                 wake_word_activity_end = get_time()
@@ -197,13 +196,22 @@ class VoskListener:
         """
         result = json.loads(result)
         text = result["text"]
-        print(text)
-        if text:
+        split = text.split(" ")
+        wake_word_split = self.wake_word[0].split(" ")
+        # user only said wake word
+        if len(split) == len(wake_word_split):
+            if not self.continous_listen:
+                # turn on continous listen
+                self.set_continous_listen(True)
+                return
+        if text and len(split) > len(wake_word_split):
             self.set_continous_listen(False)
-        return
-
+        
+        text = text[len(wake_word_split):]
+        final_text = self.wake_word[0] + (" ".join(text))
+        print("Final text", final_text)
         # Trigger the callback
-        future = asyncio.run_coroutine_threadsafe(self.callback(result), self.loop)
+        future = asyncio.run_coroutine_threadsafe(self.callback(final_text), self.loop)
         try:
             future.result()
         except Exception as ex:

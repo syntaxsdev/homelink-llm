@@ -1,3 +1,6 @@
 server_ip: http://localhost
-server_port: 6455
-wake_word: Hey Jared
+server_port: 6456
+continous_listening_max_seconds: 15
+wake_word_voice_activity_hold: 6
+wake_words:
+  - hey jared

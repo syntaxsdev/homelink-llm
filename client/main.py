@@ -24,6 +24,7 @@ class ClientResponseMixin(ResponseMixin): ...
 
 def on_startup() -> tuple[FastAPI, SoundController, VoskListener]:
     dir = os.path.abspath(__file__)
+
     client_file = os.path.abspath(os.path.join(dir, "..", "..", "config", "client.yml"))
     client_settings = load_yaml(client_file)
     if not client_settings:
@@ -36,20 +37,23 @@ def on_startup() -> tuple[FastAPI, SoundController, VoskListener]:
     sound_controller = SoundController()
 
     async def send_speech_phenomenon(input: str):
-        input: dict = json.loads(input)
-        payload = {"input": input["text"]}
+        payload = {"input": input}
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{server}{(':' + str(server_ip)) if server_ip else ''}/awake",
                 json=payload,
                 headers={"Content-Type":"application/json"}
             )
-    model = os.path.abspath(os.path.join(dir,  "..", "vosk-model-small-en-us-0.15"))
+    model = os.path.abspath(os.path.join(dir,  "..", "vosk-model-en-us-0.22"))
+
     vosk_listener = VoskListener(
+        pico_api_key="mubVWcy4cH4Y6K/GaK1HE74qqvbXNrJ2qYzFccdQhWGvd+z4YpNIuA==",
+        pico_keyword_files=os.path.abspath(os.path.join(dir, "..", "jared.ppn")),
         wake_word=client_settings["wake_words"],
         model_path=model,
         callback=send_speech_phenomenon,
         continous_listen_max=client_settings['continous_listening_max_seconds'],
+        wake_word_active_max=client_settings['wake_word_voice_activity_hold'],
         loop=asyncio.get_event_loop(),
     )
 

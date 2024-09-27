@@ -1,6 +1,6 @@
 import yaml
 from datetime import datetime
-
+from time import time
 class Colors:
     RESET = "\033[0m"
     RED = "\033[31m"
@@ -25,6 +25,12 @@ def load_yaml(file_path: str) -> dict:
             print(f"Error reading YAML file: {exc}")
             return None
 
+
+def get_time() -> float:
+    """
+    Get the current time
+    """
+    return time()
 
 def get_datetime() -> datetime:
     """
